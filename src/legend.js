@@ -2,7 +2,13 @@ c3_chart_internal_fn.initLegend = function () {
     var $$ = this;
     $$.legendItemTextBox = {};
     $$.legendHasRendered = false;
-    $$.legend = $$.svg.append("g").attr("transform", $$.getTranslate('legend'));
+
+    $$.legendSvg = $$.svg;
+    if ($$.isLegendExternal)
+        $$.legendSvg = d3.select($$.config.legend_bindto).append("svg");
+
+    $$.legend = $$.legendSvg.append("g").attr("transform", $$.getTranslate('legend'));
+
     if (!$$.config.legend_show) {
         $$.legend.style('visibility', 'hidden');
         $$.hiddenLegendIds = $$.mapToIds($$.data.targets);
@@ -44,14 +50,18 @@ c3_chart_internal_fn.updateLegendItemHeight = function (h) {
 };
 c3_chart_internal_fn.getLegendWidth = function () {
     var $$ = this;
-    return $$.config.legend_show ? $$.isLegendRight || $$.isLegendInset ? $$.legendItemWidth * ($$.legendStep + 1) : $$.currentWidth : 0;
+    return $$.config.legend_show ? $$.isLegendExternal ? $$.legendItemWidth + 10 : $$.isLegendRight || $$.isLegendInset ? $$.legendItemWidth * ($$.legendStep + 1) : $$.currentWidth : 0;
 };
 c3_chart_internal_fn.getLegendHeight = function () {
     var $$ = this, h = 0;
     if ($$.config.legend_show) {
-        if ($$.isLegendRight) {
+        if ($$.isLegendExternal) {
+            h = ($$.legendItemHeight * $$.data.targets.length) + 10;
+        }
+        else if ($$.isLegendRight) {
             h = $$.currentHeight;
-        } else {
+        }
+        else {
             h = Math.max(20, $$.legendItemHeight) * ($$.legendStep + 1);
         }
     }
@@ -138,17 +148,17 @@ c3_chart_internal_fn.updateLegend = function (targetIds, options, transitions) {
     function updatePositions(textElement, id, index) {
         var reset = index === 0, isLast = index === targetIds.length - 1,
             box = getTextBox(textElement, id),
-            itemWidth = box.width + tileWidth + (isLast && !($$.isLegendRight || $$.isLegendInset) ? 0 : paddingRight) + config.legend_padding,
+            itemWidth = box.width + tileWidth + (isLast && !($$.isLegendRight || $$.isLegendInset || $$.isLegendExternal) ? 0 : paddingRight) + config.legend_padding,
             itemHeight = box.height + paddingTop,
-            itemLength = $$.isLegendRight || $$.isLegendInset ? itemHeight : itemWidth,
-            areaLength = $$.isLegendRight || $$.isLegendInset ? $$.getLegendHeight() : $$.getLegendWidth(),
+            itemLength = $$.isLegendRight || $$.isLegendInset || $$.isLegendExternal ? itemHeight : itemWidth,
+                areaLength = $$.isLegendRight || $$.isLegendInset || !$$.isLegendExternal ? $$.getLegendHeight() : $$.getLegendWidth(),
             margin, maxLength;
 
         // MEMO: care about condifion of step, totalLength
         function updateValues(id, withoutStep) {
             if (!withoutStep) {
                 margin = (areaLength - totalLength - itemLength) / 2;
-                if (margin < posMin) {
+                if (margin < posMin && !$$.isLegendExternal) {
                     margin = (areaLength - itemLength) / 2;
                     totalLength = 0;
                     step++;
@@ -201,6 +211,12 @@ c3_chart_internal_fn.updateLegend = function (targetIds, options, transitions) {
         $$.updateLegendStep(step);
     }
 
+    if ($$.isLegendExternal)
+    {
+        xForLegend = function (id) { return 10; };
+        yForLegend = function (id) { return offsets[id] + 10; };
+    }
+    else
     if ($$.isLegendRight) {
         xForLegend = function (id) { return maxWidth * steps[id]; };
         yForLegend = function (id) { return margins[steps[id]] + offsets[id]; };
@@ -255,6 +271,10 @@ c3_chart_internal_fn.updateLegend = function (targetIds, options, transitions) {
                 config.legend_item_onmouseout.call($$, id);
             }
         });
+
+    //add tooltip to the legend item
+    l.append("title").text(function (id) { return isDefined(config.data_names[id]) ? config.data_names[id] : id; });
+
     l.append('text')
         .text(function (id) { return isDefined(config.data_names[id]) ? config.data_names[id] : id; })
         .each(function (id, i) { updatePositions(this, id, i); })

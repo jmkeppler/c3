@@ -71,6 +71,7 @@ c3_chart_internal_fn.getDefaultConfig = function () {
         color_pattern: [],
         color_threshold: {},
         // legend
+        legend_bindto: undefined, 
         legend_show: true,
         legend_hide: false,
         legend_position: 'bottom',

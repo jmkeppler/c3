@@ -136,6 +136,7 @@ c3_chart_internal_fn.initParams = function () {
     $$.y2Orient = config.axis_rotated ? (config.axis_y2_inner ? "bottom" : "top") : (config.axis_y2_inner ? "left" : "right");
     $$.subXOrient = config.axis_rotated ? "left" : "bottom";
 
+    $$.isLegendExternal = isDefined(config.legend_bindto) && config.legend_bindto !== null;
     $$.isLegendRight = config.legend_position === 'right';
     $$.isLegendInset = config.legend_position === 'inset';
     $$.isLegendTop = config.legend_inset_anchor === 'top-left' || config.legend_inset_anchor === 'top-right';
@@ -436,6 +437,11 @@ c3_chart_internal_fn.updateTargets = function (targets) {
     /*-- Sub --*/
 
     if ($$.updateTargetsForSubchart) { $$.updateTargetsForSubchart(targets); }
+
+    if ($$.isLegendExternal) {
+        $$.legendSvg.attr('height', $$.getLegendHeight());
+        $$.legendSvg.attr('width', $$.getLegendWidth());
+    }
 
     // Fade-in each chart
     $$.showTargets();
@@ -747,8 +753,8 @@ c3_chart_internal_fn.getTranslate = function (target) {
         x = asHalfPixel($$.margin2.left);
         y = asHalfPixel($$.margin2.top);
     } else if (target === 'legend') {
-        x = $$.margin3.left;
-        y = $$.margin3.top;
+        x = $$.isLegendExternal ? 0 : $$.margin3.left;
+        y = $$.isLegendExternal ? 0 : $$.margin3.top;
     } else if (target === 'x') {
         x = 0;
         y = config.axis_rotated ? 0 : $$.height;

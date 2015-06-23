@@ -33,6 +33,9 @@ c3_chart_fn.destroy = function () {
 
     $$.selectChart.classed('c3', false).html("");
 
+    if ($$.isLegendExternal)
+        d3.select($$.config.legend_bindto).html("");
+
     // MEMO: this is needed because the reference of some elements will not be released, then memory leak will happen.
     Object.keys($$).forEach(function (key) {
         $$[key] = null;

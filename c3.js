@@ -141,6 +141,8 @@
         $$.y2Orient = config.axis_rotated ? (config.axis_y2_inner ? "bottom" : "top") : (config.axis_y2_inner ? "left" : "right");
         $$.subXOrient = config.axis_rotated ? "left" : "bottom";
 
+        $$.isLegendExternal = isDefined(config.legend_bindto) && config.legend_bindto !== null;
+
         $$.isLegendRight = config.legend_position === 'right';
         $$.isLegendInset = config.legend_position === 'inset';
         $$.isLegendTop = config.legend_inset_anchor === 'top-left' || config.legend_inset_anchor === 'top-right';
@@ -441,6 +443,11 @@
         /*-- Sub --*/
 
         if ($$.updateTargetsForSubchart) { $$.updateTargetsForSubchart(targets); }
+
+        if ($$.isLegendExternal) {
+            $$.legendSvg.attr('height', $$.getLegendHeight());
+            $$.legendSvg.attr('width', $$.getLegendWidth());
+        }
 
         // Fade-in each chart
         $$.showTargets();
@@ -752,8 +759,8 @@
             x = asHalfPixel($$.margin2.left);
             y = asHalfPixel($$.margin2.top);
         } else if (target === 'legend') {
-            x = $$.margin3.left;
-            y = $$.margin3.top;
+            x = $$.isLegendExternal ? 0 : $$.margin3.left;
+            y = $$.isLegendExternal ? 0 : $$.margin3.top;
         } else if (target === 'x') {
             x = 0;
             y = config.axis_rotated ? 0 : $$.height;
@@ -1125,6 +1132,7 @@
             color_pattern: [],
             color_threshold: {},
             // legend
+            legend_bindto: undefined, 
             legend_show: true,
             legend_hide: false,
             legend_position: 'bottom',
@@ -3898,7 +3906,13 @@
         var $$ = this;
         $$.legendItemTextBox = {};
         $$.legendHasRendered = false;
-        $$.legend = $$.svg.append("g").attr("transform", $$.getTranslate('legend'));
+        
+        $$.legendSvg = $$.svg;
+        if ($$.isLegendExternal)
+            $$.legendSvg = d3.select($$.config.legend_bindto).append("svg");
+
+        $$.legend = $$.legendSvg.append("g").attr("transform", $$.getTranslate('legend'));
+
         if (!$$.config.legend_show) {
             $$.legend.style('visibility', 'hidden');
             $$.hiddenLegendIds = $$.mapToIds($$.data.targets);
@@ -3940,14 +3954,18 @@
     };
     c3_chart_internal_fn.getLegendWidth = function () {
         var $$ = this;
-        return $$.config.legend_show ? $$.isLegendRight || $$.isLegendInset ? $$.legendItemWidth * ($$.legendStep + 1) : $$.currentWidth : 0;
+        return $$.config.legend_show ? $$.isLegendExternal ? $$.legendItemWidth + 10 : $$.isLegendRight || $$.isLegendInset ? $$.legendItemWidth * ($$.legendStep + 1) : $$.currentWidth : 0;
     };
     c3_chart_internal_fn.getLegendHeight = function () {
         var $$ = this, h = 0;
         if ($$.config.legend_show) {
-            if ($$.isLegendRight) {
+            if ($$.isLegendExternal) {
+                h = ($$.legendItemHeight * $$.data.targets.length) + 10;
+            }
+            else if ($$.isLegendRight) {
                 h = $$.currentHeight;
-            } else {
+            }
+            else {
                 h = Math.max(20, $$.legendItemHeight) * ($$.legendStep + 1);
             }
         }
@@ -4034,17 +4052,17 @@
         function updatePositions(textElement, id, index) {
             var reset = index === 0, isLast = index === targetIds.length - 1,
                 box = getTextBox(textElement, id),
-                itemWidth = box.width + tileWidth + (isLast && !($$.isLegendRight || $$.isLegendInset) ? 0 : paddingRight) + config.legend_padding,
+                itemWidth = box.width + tileWidth + (isLast && !($$.isLegendRight || $$.isLegendInset || $$.isLegendExternal) ? 0 : paddingRight) + config.legend_padding,
                 itemHeight = box.height + paddingTop,
-                itemLength = $$.isLegendRight || $$.isLegendInset ? itemHeight : itemWidth,
-                areaLength = $$.isLegendRight || $$.isLegendInset ? $$.getLegendHeight() : $$.getLegendWidth(),
+                itemLength = $$.isLegendRight || $$.isLegendInset || $$.isLegendExternal ? itemHeight : itemWidth,
+                areaLength = $$.isLegendRight || $$.isLegendInset || !$$.isLegendExternal ? $$.getLegendHeight() : $$.getLegendWidth(),
                 margin, maxLength;
 
             // MEMO: care about condifion of step, totalLength
             function updateValues(id, withoutStep) {
                 if (!withoutStep) {
                     margin = (areaLength - totalLength - itemLength) / 2;
-                    if (margin < posMin) {
+                    if (margin < posMin && !$$.isLegendExternal) {
                         margin = (areaLength - itemLength) / 2;
                         totalLength = 0;
                         step++;
@@ -4097,6 +4115,12 @@
             $$.updateLegendStep(step);
         }
 
+        if ($$.isLegendExternal)
+        {
+            xForLegend = function (id) { return 10; };
+            yForLegend = function (id) { return offsets[id] + 10; };
+        }
+        else
         if ($$.isLegendRight) {
             xForLegend = function (id) { return maxWidth * steps[id]; };
             yForLegend = function (id) { return margins[steps[id]] + offsets[id]; };
@@ -4151,6 +4175,10 @@
                     config.legend_item_onmouseout.call($$, id);
                 }
             });
+
+        //add tooltip to the legend item
+        l.append("title").text(function (id) { return isDefined(config.data_names[id]) ? config.data_names[id] : id; });
+
         l.append('text')
             .text(function (id) { return isDefined(config.data_names[id]) ? config.data_names[id] : id; })
             .each(function (id, i) { updatePositions(this, id, i); })
@@ -6819,6 +6847,9 @@
         }
 
         $$.selectChart.classed('c3', false).html("");
+
+        if ($$.isLegendExternal)
+            d3.select($$.config.legend_bindto).html("");
 
         // MEMO: this is needed because the reference of some elements will not be released, then memory leak will happen.
         Object.keys($$).forEach(function (key) {
